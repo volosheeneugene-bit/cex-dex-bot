@@ -23,19 +23,22 @@ FEE_THRESHOLD = 0.40
 def fetch_cex_price():
     try:
         url = "https://api.bybit.com/v5/market/tickers?category=spot&symbol=MNTUSDT"
-        response = requests.get(url, headers=HEADERS_WEB, timeout=5)
+        response = requests.get(url, headers=HEADERS_WEB, timeout=7)
         if response.status_code != 200:
+            print(f"[CEX Error] Status: {response.status_code}, Text: {response.text}", flush=True)
             return None
         data = response.json()
         return float(data['result']['list'][0]['lastPrice'])
-    except Exception:
+    except Exception as e:
+        print(f"[CEX Exception]: {e}", flush=True)
         return None
 
 def fetch_dex_price():
     try:
         url = "https://api.dexscreener.com/latest/dex/tokens/0x78c1b0c915c4faa5fffa6cabf0219da63d7f4cb8"
-        response = requests.get(url, headers=HEADERS_WEB, timeout=5)
+        response = requests.get(url, headers=HEADERS_WEB, timeout=7)
         if response.status_code != 200:
+            print(f"[DEX Error] Status: {response.status_code}, Text: {response.text}", flush=True)
             return None
         data = response.json()
         pairs = data.get('pairs', [])
@@ -45,14 +48,16 @@ def fetch_dex_price():
         for pair in pairs:
             if pair.get('chainId') == 'mantle':
                 return float(pair.get('priceUsd'))
+        print("[DEX Warning] Пара Mantle не найдена в ответе", flush=True)
         return None
-    except Exception:
+    except Exception as e:
+        print(f"[DEX Exception]: {e}", flush=True)
         return None
 
 def insert_to_supabase(data_row):
     try:
         url = f"{SUPABASE_URL}/rest/v1/spread_events"
-        requests.post(url, json=data_row, headers=HEADERS_SUPABASE, timeout=4)
+        requests.post(url, json=data_row, headers=HEADERS_SUPABASE, timeout=5)
     except Exception:
         pass
 
@@ -66,7 +71,7 @@ def determine_status(net_spread):
     return "IGNORE"
 
 def main():
-    print("Запуск воркера (время + динамическая строка)...\n", flush=True)
+    print("Запуск воркера с расширенной диагностикой...", flush=True)
     active_event = None
 
     while True:
@@ -88,7 +93,6 @@ def main():
             net_spread = max(0.0, gross_spread - 0.40)
             status = determine_status(net_spread)
             
-            # Выводим текущее время, чтобы видеть активность бота
             print(f"\r[{current_time_str}] CEX: {cex_price} | DEX: {dex_price} | Чистый спред: {net_spread:.2f}% [{status}]     ", end="", flush=True)
 
             if net_spread >= FEE_THRESHOLD:
@@ -112,11 +116,11 @@ def main():
                         active_event["direction"] = direction
             else:
                 if active_event is not None:
-                    print(f"\n[{current_time_str}] [!] Срабатывание! Сохранение в Supabase: Длительность {active_event['duration_sec']}с, Чистый спред: {active_event['net_spread']}% [{active_event['status']}]", flush=True)
+                    print(f"\n[{current_time_str}] [!] Сохранение в Supabase: Длительность {active_event['duration_sec']}с, Чистый спред: {active_event['net_spread']}% [{active_event['status']}]", flush=True)
                     insert_to_supabase(active_event)
                     active_event = None
         else:
-            print(f"\r[{current_time_str}] [LOG] Ошибка получения цен...                       ", end="", flush=True)
+            print(f"\n[{current_time_str}] [LOG] Пропуск цикла из-за ошибки запроса цен.", flush=True)
 
         elapsed = time.time() - start_time
         sleep_time = max(0, 3.0 - elapsed)
