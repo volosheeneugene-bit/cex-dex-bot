@@ -22,15 +22,14 @@ FEE_THRESHOLD = 0.40
 
 def fetch_cex_price():
     try:
-        url = "https://api.bybit.com/v5/market/tickers?category=spot&symbol=MNTUSDT"
-        response = requests.get(url, headers=HEADERS_WEB, timeout=7)
+        target_url = "https://api.bybit.com/v5/market/tickers?category=spot&symbol=MNTUSDT"
+        proxy_url = f"https://corsproxy.io/?{target_url}"
+        response = requests.get(proxy_url, headers=HEADERS_WEB, timeout=7)
         if response.status_code != 200:
-            print(f"[CEX Error] Status: {response.status_code}, Text: {response.text}", flush=True)
             return None
         data = response.json()
         return float(data['result']['list'][0]['lastPrice'])
-    except Exception as e:
-        print(f"[CEX Exception]: {e}", flush=True)
+    except Exception:
         return None
 
 def fetch_dex_price():
@@ -38,7 +37,6 @@ def fetch_dex_price():
         url = "https://api.dexscreener.com/latest/dex/tokens/0x78c1b0c915c4faa5fffa6cabf0219da63d7f4cb8"
         response = requests.get(url, headers=HEADERS_WEB, timeout=7)
         if response.status_code != 200:
-            print(f"[DEX Error] Status: {response.status_code}, Text: {response.text}", flush=True)
             return None
         data = response.json()
         pairs = data.get('pairs', [])
@@ -48,10 +46,8 @@ def fetch_dex_price():
         for pair in pairs:
             if pair.get('chainId') == 'mantle':
                 return float(pair.get('priceUsd'))
-        print("[DEX Warning] Пара Mantle не найдена в ответе", flush=True)
         return None
-    except Exception as e:
-        print(f"[DEX Exception]: {e}", flush=True)
+    except Exception:
         return None
 
 def insert_to_supabase(data_row):
@@ -71,7 +67,7 @@ def determine_status(net_spread):
     return "IGNORE"
 
 def main():
-    print("Запуск воркера с расширенной диагностикой...", flush=True)
+    print("Запуск воркера через прокси-шлюз...", flush=True)
     active_event = None
 
     while True:
@@ -120,7 +116,7 @@ def main():
                     insert_to_supabase(active_event)
                     active_event = None
         else:
-            print(f"\n[{current_time_str}] [LOG] Пропуск цикла из-за ошибки запроса цен.", flush=True)
+            print(f"\r[{current_time_str}] [LOG] Ошибка получения цен через прокси...                       ", end="", flush=True)
 
         elapsed = time.time() - start_time
         sleep_time = max(0, 3.0 - elapsed)
