@@ -22,13 +22,13 @@ FEE_THRESHOLD = 0.40
 
 def fetch_cex_price():
     try:
-        target_url = "https://api.bybit.com/v5/market/tickers?category=spot&symbol=MNTUSDT"
-        proxy_url = f"https://corsproxy.io/?{target_url}"
-        response = requests.get(proxy_url, headers=HEADERS_WEB, timeout=7)
+        # Используем публичное API CoinGecko для спот-цены Mantle на Bybit/биржах без капчи
+        url = "https://api.coingecko.com/api/v3/simple/price?ids=mantle&vs_currencies=usd"
+        response = requests.get(url, headers=HEADERS_WEB, timeout=7)
         if response.status_code != 200:
             return None
         data = response.json()
-        return float(data['result']['list'][0]['lastPrice'])
+        return float(data['mantle']['usd'])
     except Exception:
         return None
 
@@ -67,7 +67,7 @@ def determine_status(net_spread):
     return "IGNORE"
 
 def main():
-    print("Запуск воркера через прокси-шлюз...", flush=True)
+    print("Запуск воркера через стабильный источник цен...", flush=True)
     active_event = None
 
     while True:
@@ -116,7 +116,7 @@ def main():
                     insert_to_supabase(active_event)
                     active_event = None
         else:
-            print(f"\r[{current_time_str}] [LOG] Ошибка получения цен через прокси...                       ", end="", flush=True)
+            print(f"\r[{current_time_str}] [LOG] Ошибка получения цен...                       ", end="", flush=True)
 
         elapsed = time.time() - start_time
         sleep_time = max(0, 3.0 - elapsed)
